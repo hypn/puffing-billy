@@ -10,8 +10,8 @@ module Billy
 
     def cacheable?(url, headers)
       if Billy.config.cache
-        host = URI(url).host
-        !Billy.config.whitelist.include?(host)
+        host = URI(url).host rescue nil
+        !Billy.config.whitelist.include?(host) if host.present?
         # TODO test headers for cacheability
       end
     end
@@ -69,20 +69,26 @@ module Billy
     end
 
     def key(method, url, body)
-      url = URI(url)
-      no_params = url.scheme+'://'+url.host+url.path
+      url = URI(url) rescue nil
+      if url.present?
+        no_params = url.scheme+'://'+url.host+url.path
 
-      if Billy.config.ignore_params.include?(no_params)
-        url = URI(no_params)
+        if Billy.config.ignore_params.include?(no_params)
+          url = URI(no_params)
+        end
+
+        key = method+'_'+url.host+'_'+Digest::SHA1.hexdigest(url.to_s)
+
+        if method == 'post' and !Billy.config.ignore_params.include?(no_params)
+          key += '_'+Digest::SHA1.hexdigest(body.to_s)
+        end
+
+        key
       end
+    end
 
-      key = method+'_'+url.host+'_'+Digest::SHA1.hexdigest(url.to_s)
-
-      if method == 'post' and !Billy.config.ignore_params.include?(no_params)
-        key += '_'+Digest::SHA1.hexdigest(body.to_s)
-      end
-
-      key
+    def cache_file(key)
+      File.join(Billy.config.cache_path, "#{key}.yml")
     end
 
     def cache_file(key)
